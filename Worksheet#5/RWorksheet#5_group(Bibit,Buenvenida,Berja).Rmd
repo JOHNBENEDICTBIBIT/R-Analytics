@@ -13,12 +13,11 @@ Extracting Amazon Product Reviews
 
 
 ```{r}
-# Load necessary libraries
 library(polite)
 library(rvest)
 library(dplyr)
 library(purrr)
-library(ggplot2)  # Load ggplot2 for plotting
+library(ggplot2)
 
 # Function to scrape products from a given category URL
 scrape_amazon_category <- function(category_url, category_name) {
@@ -26,21 +25,39 @@ scrape_amazon_category <- function(category_url, category_name) {
   session <- bow(category_url, user_agent = "Educational")
   
   # Scrape the page
-  page <- scrape(session)
+  page <- tryCatch({
+    scrape(session)
+  }, error = function(e) {
+    message("Error scraping the page: ", e)
+    return(NULL)  # Return NULL if there's an error
+  })
+  
+  # Check if page is NULL
+  if (is.null(page)) {
+    return(tibble())  # Return empty tibble if page is NULL
+  }
   
   # Extract product details
   products <- page %>%
     html_nodes(".s-main-slot .s-result-item") %>%
     map_df(~ {
+      # Safely extract each element and handle potential NULLs
+      title <- .x %>% html_node("h2") %>% html_text(trim = TRUE)
+      price <- .x %>% html_node(".a-price .a-offscreen") %>% html_text(trim = TRUE)
+      description <- .x %>% html_node(".a-text-normal") %>% html_text(trim = TRUE)
+      rating <- .x %>% html_node(".a-icon-alt") %>% html_text(trim = TRUE)
+      reviews <- .x %>% html_node(".a-size-small .a-link-normal") %>% html_text(trim = TRUE)
+      
       tibble(
-        Title = .x %>% html_node("h2") %>% html_text(trim = TRUE),
-        Price = .x %>% html_node(".a-price .a-offscreen") %>% html_text(trim = TRUE),
-        Description = .x %>% html_node(".a-text-normal") %>% html_text(trim = TRUE),
-        Rating = .x %>% html_node(".a-icon-alt") %>% html_text(trim = TRUE),
-        Reviews = .x %>% html_node(".a-size-small .a-link-normal") %>% html_text(trim = TRUE),
-        Category = category_name  # Add category name here
+        Title = title,
+        Price = price,
+        Description = description,
+        Rating = rating,
+        Reviews = reviews,
+        Category = category_name
       )
-    })
+    }) %>%
+    filter(!is.na(Title))  # Filter out rows with missing titles
   
   return(products)
 }
@@ -79,7 +96,7 @@ print(all_products)
 # Prepare data for bar plots
 avg_price <- all_products %>%
   group_by(Category) %>%
-  summarize(Average_Price = mean(Price, na.rm = TRUE))
+  summarize(Average_Price = mean( Price, na.rm = TRUE))
 
 avg_rating <- all_products %>%
   group_by(Category) %>%
@@ -116,3 +133,4 @@ ranked_by_rating <- all_products %>%
 # Display the ranked data
 print(ranked_by_price)
 print(ranked_by_rating)
+```
