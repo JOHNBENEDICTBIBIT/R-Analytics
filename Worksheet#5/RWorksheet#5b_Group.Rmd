@@ -1,7 +1,7 @@
 ---
-title: "Worksheet#5_group(Berja,Bibit,Buenvenida)"
+title: "RWorksheet_#5B"
 author: "Berja,Bibit,Buenvenida"
-date: "2024-11-06"
+date: "2024-11-20"
 output: pdf_document
 ---
 
@@ -9,7 +9,6 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-Extracting Amazon Product Reviews
 
 
 ```{r}
@@ -19,6 +18,32 @@ library(rvest)
 library(dplyr)
 library(purrr)
 library(ggplot2)  # Load ggplot2 for plotting
+
+# Function to scrape product reviews from a given product URL
+scrape_product_reviews <- function(product_url) {
+  # Create a polite session
+  session <- bow(product_url, user_agent = "Educational")
+  
+  # Scrape the page
+  page <- scrape(session)
+  
+  # Extract reviews
+  reviews <- page %>%
+    html_nodes(".review") %>%  # Adjust the selector based on actual HTML structure
+    map_df(~ {
+      tibble(
+        Reviewer_Name = .x %>% html_node(".a-profile-name") %>% html_text(trim = TRUE),
+        Review_Date = .x %>% html_node(".review-date") %>% html_text(trim = TRUE),
+        Individual_Rating = .x %>% html_node(".a-icon-alt") %>% html_text(trim = TRUE),
+        Review_Text = .x %>% html_node(".review-text-content span") %>% html_text(trim = TRUE),
+        Review_Title = .x %>% html_node(".review-title") %>% html_text(trim = TRUE),
+        Verified_Purchase = ifelse(grepl("Verified Purchase", .x %>% html_node(".review-title") %>% html_text(trim = TRUE)), TRUE, FALSE)
+      )
+    }) %>%
+    slice(1:20)  # Limit to 20 reviews
+
+  return(reviews)
+}
 
 # Function to scrape products from a given category URL
 scrape_amazon_category <- function(category_url, category_name) {
@@ -32,17 +57,29 @@ scrape_amazon_category <- function(category_url, category_name) {
   products <- page %>%
     html_nodes(".s-main-slot .s-result-item") %>%
     map_df(~ {
+      product_url <- .x %>% html_node("h2 a") %>% html_attr("href")  # Extract product URL
+      product_url <- paste0("https://www.amazon.com", product_url)  # Complete the URL
+      
       tibble(
         Title = .x %>% html_node("h2") %>% html_text(trim = TRUE),
         Price = .x %>% html_node(".a-price .a-offscreen") %>% html_text(trim = TRUE),
         Description = .x %>% html_node(".a-text-normal") %>% html_text(trim = TRUE),
         Rating = .x %>% html_node(".a-icon-alt") %>% html_text(trim = TRUE),
         Reviews = .x %>% html_node(".a-size-small .a-link-normal") %>% html_text(trim = TRUE),
-        Category = category_name  # Add category name here
+        Category = category_name,  # Add category name here
+        Product_URL = product_url  # Store product URL
       )
-    })
+    }) %>%
+    slice(1:20)  # Limit to 20 products
+
+  # Scrape reviews for each product
+  reviews_list <- map(products$Product_URL, scrape_product_reviews)
   
-  return(products)
+  # Combine products with their reviews
+  products_with_reviews <- products %>%
+    mutate(Reviews = reviews_list)  # Add reviews list to products
+
+  return(products_with_reviews)
 }
 
 # Example category URLs (you need to adjust these)
@@ -57,23 +94,18 @@ categories <- list(
 # Initialize an empty data frame to store all products
 all_products <- tibble()
 
-# Loop through categories and scrape 30 products from each
+# Loop through categories and scrape 20 products from each
 for (category_name in names(categories)) {
   category_url <- categories[[category_name]]
   category_products <- scrape_amazon_category(category_url, category_name)
   all_products <- bind_rows(all_products, category_products)
-  
-  # Limit to 30 products
-  if (nrow(all_products) > 30) {
-    all_products <- all_products %>% slice(1:30)
-  }
 }
 
 # Convert Price and Rating to numeric for analysis
 all_products$Price <- as.numeric(gsub("\\$", "", gsub(",", "", all_products$Price)))
 all_products$Rating <- as.numeric(gsub(" out of 5 stars", "", all_products$Rating))
 
-# Display the extracted data
+# Display the extracted data ```r
 print(all_products)
 
 # Prepare data for bar plots
@@ -116,3 +148,5 @@ ranked_by_rating <- all_products %>%
 # Display the ranked data
 print(ranked_by_price)
 print(ranked_by_rating)
+```
+
