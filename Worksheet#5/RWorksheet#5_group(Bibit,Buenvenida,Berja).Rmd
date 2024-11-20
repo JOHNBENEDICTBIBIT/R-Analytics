@@ -35,7 +35,7 @@ scrape_amazon_category <- function(category_url, category_name) {
   return(products)
 }
 
-# Example category URLs (you need to adjust these)
+# Example category URLs 
 categories <- list(
   fishing = 'https://www.amazon.com/s?k=fishing',
   electronics = 'https://www.amazon.com/s?k=electronics',
