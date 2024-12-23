@@ -1,0 +1,110 @@
+---
+title: "Worksheet5a"
+author: "Berja,Bibit,Buenvenida"
+date: "2024-12-23"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load required packages
+library(rvest)
+library(dplyr)
+library(ggplot2)
+
+# Step 1: Scrape Top 50 TV Shows from IMDb
+url <- "https://www.imdb.com/chart/toptv/"
+webpage <- read_html(url)
+
+# Extract the required information
+tv_shows <- webpage %>%
+  html_nodes(".lister-list tr") %>%
+  head(50) %>%
+  lapply(function(x) {
+    rank <- x %>% html_node(".titleColumn") %>% html_text(trim = TRUE) %>% gsub("\\..*", "", .)
+    title <- x %>% html_node(".titleColumn a") %>% html_text(trim = TRUE)
+    rating <- x %>% html_node(".imdbRating strong") %>% html_text(trim = TRUE)
+    votes <- x %>% html_node(".ratingColumn strong") %>% html_attr("title") %>% gsub(".*\\s", "", .)
+    year <- x %>% html_node(".titleColumn span") %>% html_text(trim = TRUE) %>% gsub("[()]", "", .)
+    episodes <- x %>% html_node(".titleColumn a") %>% html_attr("href") %>% gsub("/title/tt\\d+/", "", .)
+    
+    # Create a data frame for each show
+    data.frame(rank = as.numeric(rank),
+               title = title,
+               rating = as.numeric(rating),
+               votes = as.numeric(gsub(",", "", votes)),
+               episodes = as.numeric(episodes),
+               year = as.numeric(year),
+               stringsAsFactors = FALSE)
+  }) %>%
+  bind_rows()
+
+# Check the structure of the data frame
+print(tv_shows)
+print(names(tv_shows))  # Check column names
+
+# Step 2: Scrape User Reviews for Selected TV Shows
+scrape_reviews <- function(show_id) {
+  reviews_url <- paste0("https://www.imdb.com/title/", show_id, "/reviews?ref_=tt_ql_3")
+  reviews_page <- read_html(reviews_url)
+  
+  reviews <- reviews_page %>%
+    html_nodes(".review-container") %>%
+    lapply(function(x) {
+      reviewer <- x %>% html_node(".display-name-link") %>% html_text(trim = TRUE)
+      date <- x %>% html_node(".review-date") %>% html_text(trim = TRUE)
+      user_rating <- x %>% html_node(".rating-other-user-rating span") %>% html_text(trim = TRUE)
+      title <- x %>% html_node(".title") %>% html_text(trim = TRUE)
+      helpful <- x %>% html_node(".actions span") %>% html_text(trim = TRUE)
+      text_review <- x %>% html_node(".sc-16z0m5g-0") %>% html_text(trim = TRUE)
+      
+      data.frame(reviewer = reviewer,
+                 date = as.Date(date, format = "%B %d, %Y"),
+                 user_rating = as.numeric(user_rating),
+                 title = title,
+                 helpful = as.numeric(gsub(".*\\s", "", helpful)),
+                 text_review = text_review,
+                 stringsAsFactors = FALSE)
+    }) %>%
+    bind_rows()
+  
+  return(reviews)
+}
+
+# Example: Scraping reviews for the first 5 TV shows
+reviews_list <- lapply(tv_shows$title[1:5], function(title) {
+  show_id <- gsub(" ", "", title)  # Clean up the title to use as ID
+  show_id <- gsub(":", "", show_id)  # Remove colons if any
+  show_id <- gsub("[^A-Za-z0-9]", "", show_id)  # Keep only alphanumeric characters
+  scrape_reviews(show_id)
+})
+
+# Combine all reviews into one data frame
+all_reviews <- bind_rows(reviews_list)
+
+# View the reviews
+print(all_reviews)
+
+# Step 3: Create a Time Series Graph
+# Count the number of TV shows released by year
+tv_shows_count <- tv_shows %>%
+  group_by(year) %>%
+  summarise(count = n(), .groups = 'drop')  # Use .groups = 'drop' to avoid grouping issues
+
+# Create a time series graph
+ggplot(tv_shows_count, aes(x = year, y = count)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Number of TV Shows Released by Year",
+       x = "Year",
+       y = "Number of TV Shows") +
+  theme_minimal()
+
+# Identify the year with the most TV shows released
+most_released_year <- tv_shows_count[which.max(tv_shows_count$count), ]
+print(most_released_year)
+```
+
