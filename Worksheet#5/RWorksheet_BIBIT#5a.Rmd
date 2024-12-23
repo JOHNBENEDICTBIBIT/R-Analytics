@@ -10,16 +10,16 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
-# Load required packages
+
 library(rvest)
 library(dplyr)
 library(ggplot2)
 
-# Step 1: Scrape Top 50 TV Shows from IMDb
+
 url <- "https://www.imdb.com/chart/toptv/"
 webpage <- read_html(url)
 
-# Extract the required information
+
 tv_shows <- webpage %>%
   html_nodes(".lister-list tr") %>%
   head(50) %>%
@@ -31,22 +31,21 @@ tv_shows <- webpage %>%
     year <- x %>% html_node(".titleColumn span") %>% html_text(trim = TRUE) %>% gsub("[()]", "", .)
     episodes <- x %>% html_node(".titleColumn a") %>% html_attr("href") %>% gsub("/title/tt\\d+/", "", .)
     
-    # Create a data frame for each show
+    
     data.frame(rank = as.numeric(rank),
                title = title,
                rating = as.numeric(rating),
                votes = as.numeric(gsub(",", "", votes)),
                episodes = as.numeric(episodes),
-               year = as.numeric(year),
+               year = as.numeric(year), #may error ako d i dunno how to fix this
                stringsAsFactors = FALSE)
   }) %>%
   bind_rows()
 
-# Check the structure of the data frame
-print(tv_shows)
-print(names(tv_shows))  # Check column names
 
-# Step 2: Scrape User Reviews for Selected TV Shows
+print(tv_shows)
+print(names(tv_shows))  
+
 scrape_reviews <- function(show_id) {
   reviews_url <- paste0("https://www.imdb.com/title/", show_id, "/reviews?ref_=tt_ql_3")
   reviews_page <- read_html(reviews_url)
@@ -74,7 +73,7 @@ scrape_reviews <- function(show_id) {
   return(reviews)
 }
 
-# Example: Scraping reviews for the first 5 TV shows
+
 reviews_list <- lapply(tv_shows$title[1:5], function(title) {
   show_id <- gsub(" ", "", title)  # Clean up the title to use as ID
   show_id <- gsub(":", "", show_id)  # Remove colons if any
@@ -82,19 +81,18 @@ reviews_list <- lapply(tv_shows$title[1:5], function(title) {
   scrape_reviews(show_id)
 })
 
-# Combine all reviews into one data frame
+
 all_reviews <- bind_rows(reviews_list)
 
-# View the reviews
+
 print(all_reviews)
 
-# Step 3: Create a Time Series Graph
-# Count the number of TV shows released by year
+
 tv_shows_count <- tv_shows %>%
   group_by(year) %>%
   summarise(count = n(), .groups = 'drop')  # Use .groups = 'drop' to avoid grouping issues
 
-# Create a time series graph
+
 ggplot(tv_shows_count, aes(x = year, y = count)) +
   geom_line() +
   geom_point() +
@@ -103,7 +101,7 @@ ggplot(tv_shows_count, aes(x = year, y = count)) +
        y = "Number of TV Shows") +
   theme_minimal()
 
-# Identify the year with the most TV shows released
+
 most_released_year <- tv_shows_count[which.max(tv_shows_count$count), ]
 print(most_released_year)
 ```
